@@ -1,6 +1,13 @@
 package main
 
-import pbf "micro/consignment"
+import (
+	"context"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
+	"log"
+	pbf "micro/consignment"
+	"net"
+)
 
 const (
 	port = ":50051"
@@ -20,6 +27,36 @@ func (repo Repository) Create(consignment *pbf.Consignment) (*pbf.Consignment, e
 	return consignment, nil
 }
 
+type service struct {
+	repo Repository
+}
+
+func (s *service) CreateConsignment(ctx context.Context, req *pbf.Consignment) (*pbf.Response, error) {
+	consignment, err := s.repo.Create(req)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pbf.Response{Created: true, Consignment: consignment}, nil
+}
+
 func main() {
+	repo := &Repository{}
+
+	lis, err := net.Listen("tcp", port)
+
+	if err != nil {
+		log.Fatalf("failed to listen: %v", err)
+	}
+
+	s := grpc.NewServer()
+
+	pbf.RegisterShippingServiceServer(s, &service{repo})
+
+	reflection.Register(s)
+
+	if err := s.Serve(lis); err != nil {
+		log.Fatalf("failed to serve: %v", err)
+	}
 
 }
